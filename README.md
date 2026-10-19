@@ -20,7 +20,7 @@ GitHub + Streamlit Community Cloud: repoyu yükleyin, ana dosya olarak `app.py` 
 Her kural `@kural(...)` ile işaretli ayrı bir fonksiyondur; değişiklik sadece o fonksiyonda yapılır.
 
 ```python
-@kural("9.11", "Açıklama", dosya="Örnekleme yöntemi", sayfa="A.B FOOD")
+@kural("9.11", "Açıklama", dosya="Örnekleme yöntemi", sayfa="XXXX")
 def madde_9_11(ctx):
     for s in ctx.satirlar:                       # başlıklar hariç, dolu satırlar
         if s.dolu("A") and ...:
