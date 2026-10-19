@@ -1,0 +1,64 @@
+"""QM Ana Veri Kontrol Programı - Streamlit arayüzü.
+Çalıştırma:  streamlit run app.py
+"""
+import pandas as pd
+import streamlit as st
+
+from cekirdek.motor import calistir, kurallari_yukle
+from cekirdek.rapor import rapor_olustur
+
+st.set_page_config(page_title="QM Ana Veri Kontrolü", page_icon="✅", layout="wide")
+st.title("QM Ana Veri Kontrol Programı")
+st.caption("Müşteriden gelen Excel şablonları, QM Master Data Rules kurallarına göre kontrol edilir.")
+
+with st.expander("Tanımlı kurallar"):
+    kurallar = kurallari_yukle()
+    st.dataframe(pd.DataFrame([{
+        "Madde": k.id, "Kapsam": k.kapsam, "Dosya": k.dosya or "Tümü", "Sayfa": k.sayfa or "Tümü",
+        "Kural": k.baslik, "Durum": "Aktif" if k.aktif else "Pasif"} for k in kurallar]),
+        use_container_width=True, hide_index=True)
+
+dosyalar = st.file_uploader("Excel dosyalarını yükleyin (tümünü birlikte seçebilirsiniz)",
+                            type=["xlsx"], accept_multiple_files=True)
+
+if st.button("Kontrolü çalıştır", type="primary", disabled=not dosyalar):
+    with st.spinner("Kontrol ediliyor..."):
+        sonuc = calistir([(f.name, f.getvalue()) for f in dosyalar])
+        st.session_state["sonuc"] = sonuc
+        st.session_state["rapor"] = rapor_olustur(sonuc)
+
+sonuc = st.session_state.get("sonuc")
+if sonuc:
+    c1, c2, c3, c4 = st.columns(4)
+    c1.metric("Kontrol edilen dosya", len(sonuc.yuklenen_dosyalar))
+    c2.metric("Çalışan kural", len(sonuc.calisan_kurallar))
+    c3.metric("Toplam bulgu", len(sonuc.bulgular))
+    c4.metric("Kontrol edilemeyen kural", len(sonuc.atlananlar))
+
+    st.download_button("📄 Word raporunu indir", st.session_state["rapor"],
+                       file_name=f"QM_Kontrol_Raporu_{sonuc.tarih:%Y%m%d_%H%M}.docx",
+                       mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document")
+
+    for ad, neden in sonuc.taninmayan_dosyalar:
+        st.warning(f"'{ad}' kontrol edilmedi: {neden}")
+    if sonuc.yuklenmeyen_dosyalar:
+        st.info("Yüklenmeyen dosyalar: " + ", ".join(sonuc.yuklenmeyen_dosyalar))
+    if sonuc.atlananlar:
+        with st.expander("Kontrol edilemeyen kurallar"):
+            for kid, neden in sonuc.atlananlar:
+                st.write(f"**Madde {kid}** – {neden}")
+
+    if sonuc.bulgular:
+        df = pd.DataFrame([{"Dosya": b.dosya, "Sayfa": b.sayfa, "Satır": b.satir, "Hücre": b.kolon,
+                            "Değer": b.deger, "Madde": b.kural_id, "Açıklama": b.mesaj}
+                           for b in sonuc.bulgular])
+        f1, f2 = st.columns(2)
+        sec_d = f1.multiselect("Dosya filtresi", sorted(df["Dosya"].unique()))
+        sec_m = f2.multiselect("Madde filtresi", sorted(df["Madde"].unique()))
+        if sec_d:
+            df = df[df["Dosya"].isin(sec_d)]
+        if sec_m:
+            df = df[df["Madde"].isin(sec_m)]
+        st.dataframe(df, use_container_width=True, hide_index=True)
+    else:
+        st.success("Hata bulunamadı.")
